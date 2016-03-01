@@ -114,6 +114,24 @@ function (angular, TableModel, _) {
       });
     };
 
+    BosunDatasource.prototype._performMetricKeyValueWithSubtagsLookup = function(metric, key, subtags) {
+      if(!metric || !key || !subtags) {
+        return $q.when([]);
+      }
+
+      var subtags_list = subtags.split(",");
+      var valid_subtags = subtags_list.filter(function (s) {
+        return s.split("=")[1] !== "*"
+          && s.split("=")[1].charAt(0) !== "$"
+          && s.split("=")[1] !== "";
+      });
+      var params = valid_subtags.length > 0 ? "?" + valid_subtags.join("&") : "";
+
+      return this._get('/api/tagv/' + key + "/" + metric + params).then(function(result) {
+        return result.data;
+      });
+    };
+
     BosunDatasource.prototype.metricFindQuery = function(query) {
       if (!query) { return $q.when([]); }
 
@@ -134,6 +152,7 @@ function (angular, TableModel, _) {
       var metrics_regex = /metrics\((.*)\)/;
       var tag_names_regex = /tag_names\((.*)\)/;
       var tag_values_regex = /tag_values\((.*),\s?(.*)\)/;
+      var tag_values_with_subtags_regex = /tag_values_with_subtags\(([^,]+),\s?([^,]+),\s?(.+)\)/;
 
       var metrics_query = interpolated.match(metrics_regex);
       if (metrics_query) {
@@ -148,6 +167,13 @@ function (angular, TableModel, _) {
       var tag_values_query = interpolated.match(tag_values_regex);
       if (tag_values_query) {
         return this._performMetricKeyValueLookup(tag_values_query[1], tag_values_query[2]).then(responseTransform);
+      }
+
+      var tag_values_with_subtags_query = interpolated.match(tag_values_with_subtags_regex);
+      if (tag_values_with_subtags_query) {
+        return this._performMetricKeyValueWithSubtagsLookup(tag_values_with_subtags_query[1],
+                                                            tag_values_with_subtags_query[2],
+                                                            tag_values_with_subtags_query[3]).then(responseTransform);
       }
 
       return $q.when([]);
