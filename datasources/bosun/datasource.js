@@ -90,6 +90,77 @@ function (angular, TableModel, _) {
       });
     };
 
+    BosunDatasource.prototype._performSuggestQuery = function(query) {
+      return this._get('/api/metrics', {type: 'metrics', q: query, max: 1000}).then(function(result) {
+        return result.data;
+      });
+    };
+
+    BosunDatasource.prototype._performMetricKeyLookup = function(metric) {
+      if(!metric) { return $q.when([]); }
+
+      return this._get('/api/tagk/' + metric).then(function(result) {
+        return result.data;
+      });
+    };
+
+    BosunDatasource.prototype._performMetricKeyValueLookup = function(metric, key) {
+      if(!metric || !key) {
+        return $q.when([]);
+      }
+
+      return this._get('/api/tagv/' + key + "/" + metric).then(function(result) {
+        return result.data;
+      });
+    };
+
+    BosunDatasource.prototype.metricFindQuery = function(query) {
+      if (!query) { return $q.when([]); }
+
+      var interpolated;
+      try {
+        interpolated = templateSrv.replace(query);
+      }
+      catch (err) {
+        return $q.reject(err);
+      }
+
+      var responseTransform = function(result) {
+        return _.map(result, function(value) {
+          return {text: value};
+        });
+      };
+
+      var metrics_regex = /metrics\((.*)\)/;
+      var tag_names_regex = /tag_names\((.*)\)/;
+      var tag_values_regex = /tag_values\((.*),\s?(.*)\)/;
+
+      var metrics_query = interpolated.match(metrics_regex);
+      if (metrics_query) {
+        return this._performSuggestQuery(metrics_query[1]).then(responseTransform);
+      }
+
+      var tag_names_query = interpolated.match(tag_names_regex);
+      if (tag_names_query) {
+        return this._performMetricKeyLookup(tag_names_query[1]).then(responseTransform);
+      }
+
+      var tag_values_query = interpolated.match(tag_values_regex);
+      if (tag_values_query) {
+        return this._performMetricKeyValueLookup(tag_values_query[1], tag_values_query[2]).then(responseTransform);
+      }
+
+      return $q.when([]);
+    };
+
+    BosunDatasource.prototype._get = function(relativeUrl, params) {
+      return backendSrv.datasourceRequest({
+        method: 'GET',
+        url: this.url + relativeUrl,
+        params: params,
+      });
+    };
+
     function makeTable(result) {
       var table = new TableModel();
       if (Object.keys(result).length < 1) {
