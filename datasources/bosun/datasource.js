@@ -119,7 +119,7 @@ function (angular, TableModel, _) {
         return $q.when([]);
       }
 
-      var subtags_list = subtags.split(",");
+      var subtags_list = subtags.split(",").map(function(s) { return s.trim() });
       var valid_subtags = subtags_list.filter(function (s) {
         return s.split("=")[1] !== "*"
           && s.split("=")[1].charAt(0) !== "$"
