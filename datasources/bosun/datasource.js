@@ -1,27 +1,21 @@
 define([
   'angular',
-  'app/core/table_model',
   'lodash',
-  './directives',
-  './query_ctrl',
+  'app/core/utils/datemath',
+  'moment',
 ],
-function (angular, TableModel, _) {
+function (angular, _, dateMath, TableModel) {
   'use strict';
 
-  var module = angular.module('grafana.services');
+  /** @ngInject */
+  function BosunDatasource(instanceSettings, $q, backendSrv, templateSrv) {
+    this.type = 'bosun';
+    this.url = instanceSettings.url;
+    this.name = instanceSettings.name;
+    instanceSettings.jsonData = instanceSettings.jsonData || {};
+    this.supportMetrics = true;
 
-  module.factory('BosunDatasource', function($q, backendSrv, templateSrv) {
-
-    function BosunDatasource(datasource) {
-      this.type = 'bosun';
-      this.editorSrc = 'app/features/bosun/partials/query.editor.html';
-      this.name = datasource.name;
-      this.supportMetrics = true;
-      this.url = datasource.url;
-      this.lastErrors = {};
-    }
-
-    BosunDatasource.prototype._request = function(method, url, data) {
+    this._request = function(method, url, data) {
       var options = {
         url: this.url + url,
         method: method,
@@ -32,7 +26,7 @@ function (angular, TableModel, _) {
     };
 
     // Called once per panel (graph)
-    BosunDatasource.prototype.query = function(options) {
+    this.query = function(options) {
       var queries = [];
       // Get time values to replace $start
       // The end time is what bosun regards as 'now'
@@ -72,7 +66,57 @@ function (angular, TableModel, _) {
         });
     };
 
-    BosunDatasource.prototype.performTimeSeriesQuery = function(query, target, options) {
+    this._performSuggestQuery = function(query) {
+      return this._get('/api/metrics', {type: 'metrics', q: query, max: 1000}).then(function(result) {
+        return result.data;
+      });
+    };
+
+    this._performMetricKeyLookup = function(metric) {
+      if(!metric) { return $q.when([]); }
+
+      return this._get('/api/tagk/' + metric).then(function(result) {
+        return result.data;
+      });
+    };
+
+    this._performMetricKeyValueLookup = function(metric, key) {
+      if(!metric || !key) {
+        return $q.when([]);
+      }
+
+      return this._get('/api/tagv/' + key + "/" + metric).then(function(result) {
+        return result.data;
+      });
+    };
+
+    this._performMetricKeyValueWithSubtagsLookup = function(metric, key, subtags) {
+      if(!metric || !key || !subtags) {
+        return $q.when([]);
+      }
+
+      var subtags_list = subtags.split(",").map(function(s) { return s.trim(); });
+      var valid_subtags = subtags_list.filter(function (s) {
+        return s.split("=")[1] !== "*"
+          && s.split("=")[1].charAt(0) !== "$"
+          && s.split("=")[1] !== "";
+      });
+      var params = valid_subtags.length > 0 ? "?" + valid_subtags.join("&") : "";
+
+      return this._get('/api/tagv/' + key + "/" + metric + params).then(function(result) {
+        return result.data;
+      });
+    };
+
+    this._get = function(relativeUrl, params) {
+      return backendSrv.datasourceRequest({
+        method: 'GET',
+        url: this.url + relativeUrl,
+        params: params,
+      });
+    };
+
+    this.performTimeSeriesQuery = function(query, target, options) {
       var exprDate = options.range.to.utc().format('YYYY-MM-DD');
       var exprTime = options.range.to.utc().format('HH:mm:ss');
       var url = '/api/expr?date=' + encodeURIComponent(exprDate) + '&time=' + encodeURIComponent(exprTime);
@@ -90,6 +134,53 @@ function (angular, TableModel, _) {
       });
     };
 
+    this.metricFindQuery = function(query) {
+      if (!query) { return $q.when([]); }
+
+      var interpolated;
+      try {
+        interpolated = templateSrv.replace(query);
+      }
+      catch (err) {
+        return $q.reject(err);
+      }
+
+      var responseTransform = function(result) {
+        return _.map(result, function(value) {
+          return {text: value};
+        });
+      };
+
+      var metrics_regex = /metrics\((.*)\)/;
+      var tag_names_regex = /tag_names\((.*)\)/;
+      var tag_values_regex = /tag_values\((.*),\s?(.*)\)/;
+      var tag_values_with_subtags_regex = /tag_values_with_subtags\(([^,]+),\s?([^,]+),\s?(.+)\)/;
+
+      var metrics_query = interpolated.match(metrics_regex);
+      if (metrics_query) {
+        return this._performSuggestQuery(metrics_query[1]).then(responseTransform);
+      }
+
+      var tag_names_query = interpolated.match(tag_names_regex);
+      if (tag_names_query) {
+        return this._performMetricKeyLookup(tag_names_query[1]).then(responseTransform);
+      }
+
+      var tag_values_query = interpolated.match(tag_values_regex);
+      if (tag_values_query) {
+        return this._performMetricKeyValueLookup(tag_values_query[1], tag_values_query[2]).then(responseTransform);
+      }
+
+      var tag_values_with_subtags_query = interpolated.match(tag_values_with_subtags_regex);
+      if (tag_values_with_subtags_query) {
+        return this._performMetricKeyValueWithSubtagsLookup(tag_values_with_subtags_query[1],
+                                                            tag_values_with_subtags_query[2],
+                                                            tag_values_with_subtags_query[3]).then(responseTransform);
+      }
+
+      return $q.when([]);
+    };
+
     function makeTable(result) {
       var table = new TableModel();
       if (Object.keys(result).length < 1) {
@@ -105,12 +196,12 @@ function (angular, TableModel, _) {
       });
       table.columns.push({"text": "value"});
       _.each(result, function(res) {
-         var row = [];
-         _.each(res.Group, function(tagValue, tagKey) {
-           row[tagKeys.indexOf(tagKey)] = tagValue;
-         });
-         row.push(res.Value);
-         table.rows.push(row);
+        var row = [];
+        _.each(res.Group, function(tagValue, tagKey) {
+          row[tagKeys.indexOf(tagKey)] = tagValue;
+        });
+        row.push(res.Value);
+        table.rows.push(row);
       });
       return [table];
     }
@@ -141,8 +232,9 @@ function (angular, TableModel, _) {
       });
       return { target: metricLabel, datapoints: dps };
     }
+  }
 
-    return BosunDatasource;
-  });
-
+  return {
+    BosunDatasource: BosunDatasource
+  };
 });

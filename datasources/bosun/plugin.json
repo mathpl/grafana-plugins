@@ -1,15 +1,19 @@
 {
-  "pluginType": "datasource",
+  "type": "datasource",
   "name": "Bosun",
+  "id": "bosun",
 
-  "type": "bosun",
-  "serviceName": "BosunDatasource",
+  "metrics": true,
+  "annotations": false,
 
-  "module": "app/plugins/datasource/bosun/datasource",
-
-  "partials": {
-    "config": "app/plugins/datasource/bosun/partials/config.html"
-  },
-
-  "metrics": true
+  "info": {
+    "author": {
+      "name": "Grafana Project",
+      "url": "http://grafana.org"
+    },
+    "logos": {
+      "small": "img/bosun_logo.png",
+      "large": "img/bosun_logo.png"
+    }
+  }
 }
