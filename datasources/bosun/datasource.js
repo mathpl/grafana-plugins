@@ -37,7 +37,7 @@ function (angular, _, dateMath, TableModel) {
           return;
         }
         var query = {};
-        query = templateSrv.replace(target.expr, options.scopedVars);
+        query = templateSrv.replace(target.expr, options.scopedVars, 'pipe');
         query = query.replace('$start', secondsAgo);
         query = query.replace('$ds', options.interval);
         queries.push(query);
@@ -139,7 +139,7 @@ function (angular, _, dateMath, TableModel) {
 
       var interpolated;
       try {
-        interpolated = templateSrv.replace(query);
+        interpolated = templateSrv.replace(query, null, 'pipe');
       }
       catch (err) {
         return $q.reject(err);
@@ -218,7 +218,7 @@ function (angular, _, dateMath, TableModel) {
         _.each(sortedTags, function(value) {
           scopedVars['tag_' + value.key] = {"value": value.value};
         });
-        metricLabel = templateSrv.replace(target.alias, scopedVars);
+        metricLabel = templateSrv.replace(target.alias, scopedVars, 'pipe');
       } else {
         tagData = [];
         _.each(sortedTags, function(tag) {

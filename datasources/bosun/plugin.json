@@ -4,6 +4,7 @@
   "id": "bosun",
 
   "metrics": true,
+  "defaultMatchFormat": "pipe",
   "annotations": false,
 
   "info": {
