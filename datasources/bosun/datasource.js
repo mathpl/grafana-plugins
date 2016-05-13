@@ -104,17 +104,17 @@ function (angular, TableModel, _) {
       });
     };
 
-    BosunDatasource.prototype._performMetricKeyValueLookup = function(metric, key) {
+    BosunDatasource.prototype._performMetricKeyValueLookup = function(metric, key, since) {
       if(!metric || !key) {
         return $q.when([]);
       }
 
-      return this._get('/api/tagv/' + key + "/" + metric).then(function(result) {
+      return this._get('/api/tagv/' + key + "/" + metric + "?since=" + since).then(function(result) {
         return result.data;
       });
     };
 
-    BosunDatasource.prototype._performMetricKeyValueWithSubtagsLookup = function(metric, key, subtags) {
+    BosunDatasource.prototype._performMetricKeyValueWithSubtagsLookup = function(metric, key, subtags, since) {
       if(!metric || !key || !subtags) {
         return $q.when([]);
       }
@@ -125,7 +125,8 @@ function (angular, TableModel, _) {
           && s.split("=")[1].charAt(0) !== "$"
           && s.split("=")[1] !== "";
       });
-      var params = valid_subtags.length > 0 ? "?" + valid_subtags.join("&") : "";
+      valid_subtags.push("since="+since)
+      var params = "?" + valid_subtags.join("&") : "";
 
       return this._get('/api/tagv/' + key + "/" + metric + params).then(function(result) {
         return result.data;
@@ -154,6 +155,14 @@ function (angular, TableModel, _) {
       var tag_values_regex = /tag_values\((.*),\s?(.*)\)/;
       var tag_values_with_subtags_regex = /tag_values_with_subtags\(([^,]+),\s?([^,]+),\s?(.+)\)/;
 
+      var since = "1d"
+      var since_regex = /)\.since\((.*)\)$/;
+
+      since_query = interpolated.match(since_regex);
+      if (since_query) {
+        since = since_query[1]
+      }
+
       var metrics_query = interpolated.match(metrics_regex);
       if (metrics_query) {
         return this._performSuggestQuery(metrics_query[1]).then(responseTransform);
@@ -166,14 +175,15 @@ function (angular, TableModel, _) {
 
       var tag_values_query = interpolated.match(tag_values_regex);
       if (tag_values_query) {
-        return this._performMetricKeyValueLookup(tag_values_query[1], tag_values_query[2]).then(responseTransform);
+        return this._performMetricKeyValueLookup(tag_values_query[1], tag_values_query[2], since).then(responseTransform);
       }
 
       var tag_values_with_subtags_query = interpolated.match(tag_values_with_subtags_regex);
       if (tag_values_with_subtags_query) {
         return this._performMetricKeyValueWithSubtagsLookup(tag_values_with_subtags_query[1],
                                                             tag_values_with_subtags_query[2],
-                                                            tag_values_with_subtags_query[3]).then(responseTransform);
+                                                            tag_values_with_subtags_query[3],
+                                                            since).then(responseTransform);
       }
 
       return $q.when([]);
