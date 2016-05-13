@@ -126,7 +126,7 @@ function (angular, TableModel, _) {
           && s.split("=")[1] !== "";
       });
       valid_subtags.push("since="+since)
-      var params = "?" + valid_subtags.join("&") : "";
+      var params = "?" + valid_subtags.join("&");
 
       return this._get('/api/tagv/' + key + "/" + metric + params).then(function(result) {
         return result.data;
@@ -150,15 +150,15 @@ function (angular, TableModel, _) {
         });
       };
 
-      var metrics_regex = /metrics\((.*)\)/;
-      var tag_names_regex = /tag_names\((.*)\)/;
-      var tag_values_regex = /tag_values\((.*),\s?(.*)\)/;
-      var tag_values_with_subtags_regex = /tag_values_with_subtags\(([^,]+),\s?([^,]+),\s?(.+)\)/;
+      var metrics_regex = /^metrics\((.*)\)/;
+      var tag_names_regex = /^tag_names\((.*)\)/;
+      var tag_values_regex = /^tag_values\((.*),\s?([^)]+)\)/;
+      var tag_values_with_subtags_regex = /^tag_values_with_subtags\(([^,]+),\s?([^,]+),\s?([^)]+)\)/;
 
       var since = "1d"
-      var since_regex = /)\.since\((.*)\)$/;
+      var since_regex = /\)\.since\((.*)\)$/;
 
-      since_query = interpolated.match(since_regex);
+      var since_query = interpolated.match(since_regex);
       if (since_query) {
         since = since_query[1]
       }
